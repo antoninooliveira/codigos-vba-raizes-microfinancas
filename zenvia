@@ -1,0 +1,86 @@
+' Pega a planilha clientes cadastrados do mpo e a "base operações" na nuvem em inteligencia, joga na pasta "nova pasta" 
+
+Sub AtualizarDatasDeVencimento()
+    Dim wsClientes As Worksheet, wsBase As Worksheet
+    Dim wbClientes As Workbook, wbBase As Workbook
+    Dim arquivoClientes As String, arquivoBase As String
+    Dim ultimaLinhaClientes As Long, ultimaLinhaBase As Long
+    Dim rngClientes As Range, rngBase As Range
+    Dim cpf As String, idProposta As String
+    Dim dataVencimento As Date
+    Dim mesSelecionado As Integer
+    Dim dictDatas As Object
+
+    ' Solicitar ao usuário o mês desejado
+    mesSelecionado = Application.InputBox("Informe o número do mês desejado (1 a 12):", "Selecionar Mês", Month(Date), Type:=1)
+    If mesSelecionado < 1 Or mesSelecionado > 12 Then
+        MsgBox "Mês inválido! O código será encerrado.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Inicializar o dicionário para armazenar os IDs de proposta e datas de vencimento
+    Set dictDatas = CreateObject("Scripting.Dictionary")
+
+    ' Caminho dos arquivos
+    arquivoClientes = "C:\Users\Usuario\Desktop\Nova pasta\clientes cadastrados.xls"
+    arquivoBase = "C:\Users\Usuario\Desktop\Nova pasta\base operações.xlsx"
+
+    ' Abrir as planilhas
+    Set wbClientes = Workbooks.Open(arquivoClientes)
+    Set wsClientes = wbClientes.Sheets(1) ' Considera que os dados estão na primeira aba
+
+    Set wbBase = Workbooks.Open(arquivoBase)
+    Set wsBase = wbBase.Sheets("Relatório de Operação_Base")
+
+    ' Identificar última linha das planilhas
+    ultimaLinhaClientes = wsClientes.Cells(wsClientes.Rows.Count, "A").End(xlUp).Row
+    ultimaLinhaBase = wsBase.Cells(wsBase.Rows.Count, "E").End(xlUp).Row
+
+    ' Criar intervalo com os dados
+    Set rngClientes = wsClientes.Range("A2:A" & ultimaLinhaClientes) ' Nome está na coluna A
+    Set rngBase = wsBase.Range("E2:E" & ultimaLinhaBase) ' CPF está na coluna E
+
+    ' Percorrer os nomes na planilha "clientes cadastrados"
+    Dim i As Long, j As Long
+    Dim propostaStatus As String
+    Dim valorPago As Double
+
+    For i = 2 To ultimaLinhaClientes
+        propostaStatus = Trim(wsClientes.Cells(i, "S").Value) ' Lê e remove espaços da coluna S
+
+        ' Verificar se o status da proposta é "Proposta Ativa"
+        If UCase(propostaStatus) = "PROPOSTA ATIVA" Then
+            cpf = wsClientes.Cells(i, "A").Value
+            idProposta = wsClientes.Cells(i, "T").Value
+
+            ' Procurar o CPF correspondente na "base de operações"
+            For j = 2 To ultimaLinhaBase
+                If wsBase.Cells(j, "D").Value = cpf Then ' Nome na coluna D da base de operações
+                    dataVencimento = wsBase.Cells(j, "AP").Value ' Data da parcela está na coluna AP
+                    valorPago = wsBase.Cells(j, "AQ").Value ' Valor pago está na coluna AQ
+
+                    ' Verificar se o valor pago é 0 e se a data pertence ao mês selecionado
+                    If valorPago = 0 And Month(dataVencimento) = mesSelecionado Then
+                        ' Adicionar ao dicionário se não existir ou atualizar
+                        If Not dictDatas.exists(idProposta) Then
+                            dictDatas.Add idProposta, dataVencimento
+                        ElseIf dictDatas(idProposta) > dataVencimento Then
+                            dictDatas(idProposta) = dataVencimento
+                        End If
+                    End If
+                End If
+            Next j
+        End If
+    Next i
+
+    ' Transferir os valores da coluna V
+    For i = 2 To ultimaLinhaClientes
+        idProposta = wsClientes.Cells(i, "T").Value
+        If dictDatas.exists(idProposta) Then
+            wsClientes.Cells(i, "V").Value = dictDatas(idProposta)
+        End If
+    Next i
+
+    MsgBox "Transferência de datas concluída!", vbInformation
+
+End Sub
